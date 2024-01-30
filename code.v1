@@ -1,0 +1,84 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <math.h>
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET    4
+
+Adafruit_SSD1306 display(OLED_RESET);
+
+int PinTrigger = 2;
+int PinEcho = 3;
+float TempoEcho = 0;
+const float velocidadeSom_mps = 340;
+const float velocidadeSom_mpus = 0.340; // Velocidade em milímetros por microssegundo
+
+// Parâmetros da caixa d'água
+float baseMenor = 35.0; // em milímetros (altere conforme necessário)
+float baseMaior = 45.0; // em milímetros (altere conforme necessário)
+float alturaCheia = 0.0; // em milímetros
+float alturaZerada = 120.0; // em milímetros
+
+// Coeficientes para a transformação linear
+float volumeCheio = 0.5 * (baseMenor + baseMaior) * alturaZerada / 10; // volume total em milímetros
+float m = -volumeCheio / (alturaZerada - alturaCheia);
+float b = volumeCheio;
+
+void setup() {
+  Wire.begin(9600);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  pinMode(PinTrigger, OUTPUT);
+  digitalWrite(PinTrigger, LOW);
+  pinMode(PinEcho, INPUT);
+  Serial.begin(9600);
+  delay(2000);
+}
+
+void loop() {
+  DisparaPulsoUltrassonico();
+  TempoEcho = pulseIn(PinEcho, HIGH);
+
+  float distanciaMilimetros = CalculaDistancia(TempoEcho);
+
+  Serial.print("Distancia em milimetros: ");
+  Serial.println(distanciaMilimetros);
+
+  // Calcula o volume atual com base na altura da água
+  float volumeAtual = m * distanciaMilimetros + b;
+
+  // Garante que o volume não seja negativo
+  volumeAtual = max(0, volumeAtual);
+
+  Serial.print("Volume atual: ");
+  Serial.println(volumeAtual);
+
+  // Exibe o volume na tela OLED
+  exibirVolumeOLED(volumeAtual);
+  delay(2000);
+}
+
+void DisparaPulsoUltrassonico() {
+  digitalWrite(PinTrigger, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(PinTrigger, LOW);
+}
+
+float CalculaDistancia(float tempo_us) {
+  return ((tempo_us * velocidadeSom_mpus) / 2);
+}
+
+void exibirVolumeOLED(float volume) {
+  display.clearDisplay();
+
+  display.setTextSize(2);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print("Volume:");
+  display.setCursor(0, 16);
+  display.print(volume, 2); // Exibe o volume com 2 casas decimais
+  display.print(" mL");
+
+  display.display();
+}
